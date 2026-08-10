@@ -4,3 +4,11 @@
 
 .git
 .gitignore
+.env
+__pycache__
+.venv
+*.pyc
+.pytest_cache
+tests
+screenshots
+.github
