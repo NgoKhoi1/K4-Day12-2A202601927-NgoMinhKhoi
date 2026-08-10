@@ -10,17 +10,17 @@
 
 | Mục | Nội dung |
 |-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo K4-DAY12-...) |
+| Họ và tên | Ngô Minh Khôi |
+| Mã học viên | 2A202601927 |
+| Repo | https://github.com/NgoKhoi1/K4-Day12-2A202601927-NgoMinhKhoi |
 
 ## Service
 
 | Mục | Nội dung |
 |-----|----------|
-| Public URL | https://TODO-thay-bang-url-that.up.railway.app |
-| Platform | Railway / Render / Cloud Run — (điền platform bạn dùng) |
-| Ngày deploy | (điền ngày) |
+| Public URL | https://k4-day12-2a202601927-ngominhkhoi.onrender.com |
+| Platform | Render |
+| Ngày deploy | 10/08/2026 |
 
 ## Biến Môi Trường Đã Set Trên Cloud
 
@@ -30,7 +30,7 @@ Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
 |------|--------|---------|
 | `PORT` | ✅ | platform tự gán |
 | `API_TOKEN` | ✅ | đặt trong dashboard, không nằm trong repo |
-| `REDIS_URL` | ✅ | (điền: Redis add-on của platform / Upstash / ...) |
+| `REDIS_URL` | ✅ | Render Redis add-on (`day12-chat-redis`), gắn tự động qua `fromService` trong `render.yaml` |
 | `BUCKET_CAPACITY` | ✅ | 10 |
 | `REFILL_PER_MINUTE` | ✅ | 10 |
 | `DAILY_BUDGET_USD` | ✅ | 1.0 |
@@ -38,32 +38,33 @@ Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
 
 ## Lệnh Kiểm Tra
 
-Thay `<URL>` bằng Public URL ở trên:
-
 ```bash
+URL=https://k4-day12-2a202601927-ngominhkhoi.onrender.com
+export $(grep -E '^DEPLOY_API_TOKEN=' .env | xargs)   # token của chính service đã deploy
+
 # 1. Liveness — mong đợi 200 {"status":"ok"}
-curl -i <URL>/healthz
+curl -i "$URL/healthz"
 
 # 2. Readiness — mong đợi 200 {"status":"ready"} (đã nối được Redis)
-curl -i <URL>/readyz
+curl -i "$URL/readyz"
 
 # 3. Không có token — mong đợi 401 kèm header WWW-Authenticate
-curl -i -X POST <URL>/chat \
+curl -i -X POST "$URL/chat" \
   -H "Content-Type: application/json" \
   -d '{"message":"Hello"}'
 
 # 4. Có token — mong đợi 200 kèm câu trả lời
-curl -i -X POST <URL>/chat \
+curl -i -X POST "$URL/chat" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Authorization: Bearer $DEPLOY_API_TOKEN" \
   -H "X-Client-Id: sv-test" \
-  -d '{"message":"Deploy là gì?"}'
+  -d '{"message":"Deploy la gi?"}'
 
 # 5. Rate limit — gọi 15 lần, những lần cuối phải trả 429
 for i in $(seq 1 15); do
-  curl -s -o /dev/null -w "%{http_code} " -X POST <URL>/chat \
+  curl -s -o /dev/null -w "%{http_code} " -X POST "$URL/chat" \
     -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $API_TOKEN" \
+    -H "Authorization: Bearer $DEPLOY_API_TOKEN" \
     -H "X-Client-Id: sv-test" \
     -d '{"message":"test"}'
 done; echo
@@ -71,11 +72,39 @@ done; echo
 
 ## Kết Quả Chạy Thật
 
-Dán output của các lệnh trên vào đây:
+Chạy lúc 2026-08-10 10:50 UTC:
 
 ```
-(điền output)
+=== 1. healthz ===
+HTTP/1.1 200 OK
+{"status":"ok","service":"day12-chat-service","version":"1.0.0"}
+
+=== 2. readyz ===
+HTTP/1.1 503 Service Unavailable
+{"status":"not ready","redis":false}
+
+=== 3. chat khong token ===
+HTTP/1.1 401 Unauthorized
+www-authenticate: Bearer
+{"detail":"invalid or missing bearer token"}
+
+=== 4. chat co token ===
+HTTP/1.1 500 Internal Server Error
+Internal Server Error
+
+=== 5. rate limit x15 ===
+500 500 500 500 500 500 500 500 500 500 500 500 500 500 500
 ```
+
+**Vấn đề đang biết:** `/readyz` và `/chat` (khi có token) đang lỗi vì service
+`day12-chat` chưa kết nối được tới Redis trên Render — log server báo
+`redis.exceptions.ConnectionError: Error 111 connecting to localhost:6379.
+Connection refused.`, tức là biến `REDIS_URL` thật (gắn tự động qua
+`fromService` trong `render.yaml`) chưa được process đang chạy đọc đúng, dù
+service Redis `day12-chat-redis` báo trạng thái bình thường. Đã thử: xoá biến
+`REDIS_URL` bị set tay đè lên bằng `redis://localhost:6379/0`, và chạy Manual
+Sync từ Blueprint — vẫn chưa hết lỗi. Các phần khác (`/healthz`, xác thực
+Bearer 401) hoạt động đúng. Sẽ tiếp tục xử lý sau khi nộp.
 
 ## Ảnh Chụp Màn Hình
 
@@ -97,6 +126,5 @@ Không đăng ký được tài khoản cloud? Vẫn nộp được bài, nhưng
    `http://localhost:8000`
 5. Ghi rõ lý do không deploy được vào phần dưới đây:
 
-```
-(điền lý do nếu dùng phương án dự phòng, ngược lại xóa mục này)
-```
+Không áp dụng — đã deploy thật lên Render (xem mục Service ở trên), không
+dùng phương án dự phòng LOCAL_FALLBACK.
